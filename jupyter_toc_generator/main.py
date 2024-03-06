@@ -16,7 +16,8 @@ def main():
         notebook_dict = json.load(f)
 
     notebook = Notebook(notebook_dict=notebook_dict,
-                        force_toc_in_first_cell=args.force_toc_in_first_cell)
+                        force_toc_in_first_cell=args.force_toc_in_first_cell,
+                        offset_lvl=args.offset)
 
     if not args.skip_anchor_tags:
         notebook.add_anchor_tags()
@@ -35,3 +36,6 @@ def main():
         print(f'Copying Table of Contents Markdown to clipboard.')
         toc_lines = notebook.generate_new_toc_lines()
         copy_to_clipboard(toc_lines)
+
+if __name__ == '__main__':
+    main()

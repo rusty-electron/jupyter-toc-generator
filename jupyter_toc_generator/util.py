@@ -39,6 +39,10 @@ def parse_arguments() -> Namespace:
     parser.add_argument('-c', '--clipboard',
                         help='Copy generated TOC to clipboard.',
                         action='store_true')  # sets default to False
+    parser.add_argument('--offset',
+                        help='Offset the bullet points (generated from header by this value)',
+                        type=int,
+                        default=0)
     return parser.parse_args()
 
 

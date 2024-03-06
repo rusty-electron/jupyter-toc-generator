@@ -13,9 +13,16 @@ REGEX_HEADER_WITH_ANCHOR = '.*<a.*class="anchor".*</a>'
 
 
 class Header:
-    def __init__(self, header_line: str):
+    def __init__(self, header_line: str, offset_lvl: int):
         self.header_line = header_line  # direct reference to original notebook dict but immutable
         self.level: int = self._parse_level()
+        if self.level > 0:
+            if offset_lvl != 0:
+                self.level -= 1
+                if self.level < 0:
+                    raise ValueError(f"header level value for {header_line} is an invalid value of {self.level}. "
+                                    f"Are you using the '--offset' option incorrectly?")
+
         self.text: str = self._parse_text()
 
     def generate_anchor_tag(self, anchor_id: str) -> str:
@@ -79,10 +86,11 @@ def line_has_header(line: str) -> bool:
 
 
 class HeaderCell:
-    def __init__(self, cell: Dict):
+    def __init__(self, cell: Dict, offset_lvl: int):
+        self.offset_lvl = offset_lvl
         self.cell = cell  # direct reference to original notebook dict
         self.first_line = cell['source'][0]  # direct reference to original notebook dict
-        self.header = Header(self.first_line)
+        self.header = Header(self.first_line, self.offset_lvl)
 
     @property
     def has_anchor_tag(self) -> bool:
@@ -102,26 +110,31 @@ class HeaderCell:
         leading_words = self.header.text.lower().split()[:3]
         anchor_id = '_'.join(leading_words)
 
+        # replace non-alphanumeric characters with _
+        anchor_id = re.sub(r'\W+', '_', anchor_id)
+
         tries = 0
         while anchor_id in anchor_id_blacklist and tries < 50:
             anchor_id += '_' + str(tries)
         anchor_tag = self.header.generate_anchor_tag(anchor_id=anchor_id)
         self.cell['source'][0] = self.first_line.strip() + ' ' + anchor_tag
         self.first_line = self.cell['source'][0]
-        self.header = Header(self.first_line)
+        self.header = Header(self.first_line, self.offset_lvl)
 
         logger.info(f'Generated anchor id {anchor_id} for {self.header.text}')
 
 
 class Notebook:
     """ """
-    def __init__(self, notebook_dict: Dict, force_toc_in_first_cell: bool):
+    def __init__(self, notebook_dict: Dict, force_toc_in_first_cell: bool, offset_lvl: int):
+        self.offset_lvl = offset_lvl
         self.notebook: Dict = notebook_dict  # direct reference to original notebook dict
         self.updated = False
         self.header_cells = self._identify_header_cells()
         self.toc_cell = self._identify_toc_cell()
         self.force_toc_in_first_cell = force_toc_in_first_cell
         self.overall_title = self._identify_overall_title()  # optionally skipped for tag creation & toc inserted after
+
 
     def _identify_overall_title(self) -> Optional[HeaderCell]:
         """
@@ -239,7 +252,7 @@ class Notebook:
         logger.info(f'Identified {len(markdown_cells)} markdown, {len(code_cells)} code and '
                     f'{len(other_cells)} other cells.')
 
-        header_cells = [HeaderCell(c) for c in markdown_cells if line_has_header(c['source'][0])]
+        header_cells = [HeaderCell(c, self.offset_lvl) for c in markdown_cells if line_has_header(c['source'][0])]
         header_cells_with_anchor = [c for c in header_cells if c.has_anchor_tag]
         header_cells_without_anchor = [c for c in header_cells if not c.has_anchor_tag]
 
